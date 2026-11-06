@@ -34,10 +34,16 @@ func (uc *UpCmd) saveAlbum(ctx context.Context, album assets.Album, ids []string
 		album.ID = r.ID
 		return album, nil
 	}
-	_, err := uc.client.Immich.AddAssetToAlbum(ctx, album.ID, ids)
+	res, err := uc.client.Immich.AddAssetToAlbum(ctx, album.ID, ids)
 	if err != nil {
 		uc.app.Log().Error("failed to add assets to album", "err", err, "album", album.Title, "assets", len(ids))
 		return album, err
+	}
+	for _, r := range res {
+		// The server answers 200 with a status per asset: don't hide the failures.
+		if !r.Success && r.Error != "duplicate" {
+			uc.app.Log().Error("asset not added to album", "album", album.Title, "asset", r.ID, "reason", r.Error)
+		}
 	}
 	uc.app.Log().Info("updated album", "album", album.Title, "assets", len(ids))
 	return album, err
@@ -56,10 +62,15 @@ func (uc *UpCmd) saveTags(ctx context.Context, tag assets.Tag, ids []string) (as
 		uc.app.Log().Info("created tag", "tag", tag.Value)
 		tag.ID = r[0].ID
 	}
-	_, err := uc.client.Immich.TagAssets(ctx, tag.ID, ids)
+	res, err := uc.client.Immich.TagAssets(ctx, tag.ID, ids)
 	if err != nil {
 		uc.app.Log().Error("failed to add assets to tag", "err", err, "tag", tag.Value, "assets", len(ids))
 		return tag, err
+	}
+	for _, r := range res {
+		if !r.Success && r.Error != "duplicate" {
+			uc.app.Log().Error("asset not added to tag", "tag", tag.Value, "asset", r.ID, "reason", r.Error)
+		}
 	}
 	uc.app.Log().Info("updated tag", "tag", tag.Value, "assets", len(ids))
 	return tag, err
@@ -687,6 +698,9 @@ func (uc *UpCmd) manageAssetAlbums(ctx context.Context, f fshelper.FSAndName, ID
 }
 
 func (uc *UpCmd) manageAssetTags(ctx context.Context, a *assets.Asset) {
+	// Command line tags apply to every handled asset, including the ones already on the server.
+	// AddTag ignores tags the asset already has.
+	uc.addCommandLineTags(a)
 	if len(a.Tags) == 0 {
 		return
 	}
@@ -712,7 +726,6 @@ func (uc *UpCmd) processUploadedAsset(ctx context.Context, a *assets.Asset) {
 	// TODO: current version of Immich doesn't allow to add same tag to an asset already tagged.
 	//       there is no mean to go the list of tagged assets for a given tag.
 	uc.manageAssetAlbums(ctx, a.File, a.ID, a.Albums)
-	uc.addCommandLineTags(a)
 	uc.manageAssetTags(ctx, a)
 }
 
