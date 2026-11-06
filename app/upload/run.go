@@ -39,12 +39,19 @@ func (uc *UpCmd) saveAlbum(ctx context.Context, album assets.Album, ids []string
 		uc.app.Log().Error("failed to add assets to album", "err", err, "album", album.Title, "assets", len(ids))
 		return album, err
 	}
+	// The server answers 200 with a status per asset: don't hide the failures.
+	added, already := 0, 0
 	for _, r := range res {
-		// The server answers 200 with a status per asset: don't hide the failures.
-		if !r.Success && r.Error != "duplicate" {
+		switch {
+		case r.Success:
+			added++
+		case r.Error == "duplicate":
+			already++
+		default:
 			uc.app.Log().Error("asset not added to album", "album", album.Title, "asset", r.ID, "reason", r.Error)
 		}
 	}
+	uc.app.Log().Info("album update answer", "album", album.Title, "added", added, "already in album", already, "answers", len(res))
 	uc.app.Log().Info("updated album", "album", album.Title, "assets", len(ids))
 	return album, err
 }
@@ -67,11 +74,18 @@ func (uc *UpCmd) saveTags(ctx context.Context, tag assets.Tag, ids []string) (as
 		uc.app.Log().Error("failed to add assets to tag", "err", err, "tag", tag.Value, "assets", len(ids))
 		return tag, err
 	}
+	added, already := 0, 0
 	for _, r := range res {
-		if !r.Success && r.Error != "duplicate" {
+		switch {
+		case r.Success:
+			added++
+		case r.Error == "duplicate":
+			already++
+		default:
 			uc.app.Log().Error("asset not added to tag", "tag", tag.Value, "asset", r.ID, "reason", r.Error)
 		}
 	}
+	uc.app.Log().Info("tag update answer", "tag", tag.Value, "added", added, "already tagged", already, "answers", len(res))
 	uc.app.Log().Info("updated tag", "tag", tag.Value, "assets", len(ids))
 	return tag, err
 }
