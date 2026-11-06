@@ -614,6 +614,9 @@ func (uc *UpCmd) uploadAsset(ctx context.Context, a *assets.Asset) error {
 		original := uc.assetIndex.getByID(ar.ID)
 		if original != nil {
 			originalName = original.OriginalFileName
+		} else {
+			uc.app.Log().Warn("the server reports a duplicate that is not in the list of server assets: the original is probably in the trash, in the locked folder or owned by another user. It can't be added to albums or tags in a visible way",
+				"file", a.File, "serverID", ar.ID)
 		}
 		if a.ID == "" {
 			// Record as discarded - local duplicate
